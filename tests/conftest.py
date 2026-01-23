@@ -100,6 +100,11 @@ def mock_robovac() -> MagicMock:
     # For human readable values, return the original value (no conversion)
     mock.getRoboVacHumanReadableValue.side_effect = lambda command, value: value
 
+    # Non-protobuf model
+    mock.uses_protobuf.return_value = False
+    mock.parse_protobuf_status.return_value = None
+    mock.parse_protobuf_error.return_value = None
+
     # Set up async methods with AsyncMock
     mock.async_get = AsyncMock(return_value=mock._dps)
     mock.async_set = AsyncMock(return_value=True)
@@ -130,6 +135,11 @@ def mock_g30() -> MagicMock:
     )
     mock.getFanSpeeds.return_value = ["No Suction", "Standard", "Boost IQ", "Max"]
     mock._dps = {}
+
+    # Non-protobuf model
+    mock.uses_protobuf.return_value = False
+    mock.parse_protobuf_status.return_value = None
+    mock.parse_protobuf_error.return_value = None
 
     # Set up async methods with AsyncMock
     mock.async_get = AsyncMock(return_value=mock._dps)
@@ -208,6 +218,11 @@ def mock_l60() -> MagicMock:
         return value
 
     mock.getRoboVacCommandValue.side_effect = l60_command_value_side_effect
+
+    # Non-protobuf model (T2278 L60)
+    mock.uses_protobuf.return_value = False
+    mock.parse_protobuf_status.return_value = None
+    mock.parse_protobuf_error.return_value = None
 
     # Set up async methods with AsyncMock
     mock.async_get = AsyncMock(return_value=mock._dps)
@@ -309,6 +324,11 @@ def mock_t2080() -> MagicMock:
         return value
 
     mock.getRoboVacHumanReadableValue.side_effect = mock_get_human_readable_value
+
+    # Non-protobuf model
+    mock.uses_protobuf.return_value = False
+    mock.parse_protobuf_status.return_value = None
+    mock.parse_protobuf_error.return_value = None
 
     return mock
 

@@ -59,6 +59,11 @@ def mock_t2080_robovac() -> RoboVac:
     mock.getFanSpeeds.return_value = ["quiet", "standard", "turbo", "max"]
     mock._get_dps_code.return_value = "153"  # STATUS code for T2080
 
+    # Non-protobuf model
+    mock.uses_protobuf.return_value = False
+    mock.parse_protobuf_status.return_value = None
+    mock.parse_protobuf_error.return_value = None
+
     return mock
 
 

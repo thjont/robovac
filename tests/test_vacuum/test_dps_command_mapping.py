@@ -162,6 +162,11 @@ async def test_vacuum_update_uses_correct_dps_codes() -> None:
     mock_robovac.getRoboVacHumanReadableValue.side_effect = lambda command, value: value
     mock_robovac.getRoboVacActivityMapping.return_value = None
 
+    # Non-protobuf model
+    mock_robovac.uses_protobuf.return_value = False
+    mock_robovac.parse_protobuf_status.return_value = None
+    mock_robovac.parse_protobuf_error.return_value = None
+
     # Initialize the vacuum entity
     with patch("custom_components.robovac.vacuum.RoboVac", return_value=mock_robovac):
         entity = RoboVacEntity(mock_vacuum_data)

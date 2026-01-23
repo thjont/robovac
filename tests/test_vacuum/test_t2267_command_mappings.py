@@ -6,7 +6,7 @@ from unittest.mock import patch
 from homeassistant.components.vacuum import VacuumActivity
 
 from custom_components.robovac.robovac import RoboVac
-from custom_components.robovac.vacuums.base import RobovacCommand
+from custom_components.robovac.vacuums.base import RobovacCommand, CleaningState
 
 
 @pytest.fixture
@@ -41,12 +41,14 @@ def test_t2267_dps_codes(mock_t2267_robovac: RoboVac) -> None:
 
 
 def test_t2267_mode_command_values(mock_t2267_robovac: RoboVac) -> None:
-    """Test T2267 MODE command value mappings."""
+    """Test T2267 MODE command value mappings (protobuf-based)."""
+    # These are protobuf-encoded commands
     assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.MODE, "auto") == "BBoCCAE="
     assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.MODE, "pause") == "AggN"
-    assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.MODE, "spot") == "AA=="
+    assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.MODE, "spot") == "BggDMgIIAQ=="
     assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.MODE, "return") == "AggG"
-    assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.MODE, "nosweep") == "AggO"
+    assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.MODE, "resume") == "AggO"
+    assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.MODE, "stop") == "AggM"
 
     # Unknown returns as-is
     assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.MODE, "unknown") == "unknown"
@@ -65,12 +67,13 @@ def test_t2267_fan_speed_command_values(mock_t2267_robovac: RoboVac) -> None:
 
 
 def test_t2267_direction_command_values(mock_t2267_robovac: RoboVac) -> None:
-    """Test T2267 DIRECTION command value mappings."""
-    assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.DIRECTION, "brake") == "brake"
-    assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.DIRECTION, "forward") == "forward"
-    assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.DIRECTION, "back") == "back"
-    assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.DIRECTION, "left") == "left"
-    assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.DIRECTION, "right") == "right"
+    """Test T2267 DIRECTION command value mappings (protobuf-based)."""
+    # These are protobuf-encoded direction commands
+    assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.DIRECTION, "brake") == "AggA"
+    assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.DIRECTION, "forward") == "AggB"
+    assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.DIRECTION, "back") == "AggC"
+    assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.DIRECTION, "left") == "AggD"
+    assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.DIRECTION, "right") == "AggE"
 
     # Unknown returns as-is
     assert mock_t2267_robovac.getRoboVacCommandValue(RobovacCommand.DIRECTION, "unknown") == "unknown"
@@ -94,110 +97,89 @@ def test_t2267_command_codes(mock_t2267_robovac: RoboVac) -> None:
     assert commands[RobovacCommand.ERROR]["code"] == 177
 
 
-def test_t2267_status_values(mock_t2267_robovac: RoboVac) -> None:
-    """Test T2267 STATUS command value mappings."""
-    # Cleaning states
-    assert mock_t2267_robovac.getRoboVacHumanReadableValue(
-        RobovacCommand.STATUS, "BgoAEAUyAA=="
-    ) == "Cleaning"
-    assert mock_t2267_robovac.getRoboVacHumanReadableValue(
-        RobovacCommand.STATUS, "BgoAEAVSAA=="
-    ) == "Positioning"
+def test_t2267_protobuf_status_parsing(mock_t2267_robovac: RoboVac) -> None:
+    """Test T2267 protobuf-based STATUS parsing."""
+    # Verify this model uses protobuf
+    assert mock_t2267_robovac.uses_protobuf()
 
-    # Room cleaning states
-    assert mock_t2267_robovac.getRoboVacHumanReadableValue(
-        RobovacCommand.STATUS, "CAoCCAEQBTIA"
-    ) == "Room Cleaning"
-    assert mock_t2267_robovac.getRoboVacHumanReadableValue(
-        RobovacCommand.STATUS, "CgoCCAEQBTICCAE="
-    ) == "Room Paused"
+    # Test parsing various status codes
+    test_cases = [
+        # (base64_status, expected_state, expected_display_contains)
+        ("BgoAEAUyAA==", CleaningState.CLEANING, "Cleaning"),
+        ("BgoAEAVSAA==", CleaningState.POSITIONING, "Positioning"),
+        ("CAoAEAUyAggB", CleaningState.PAUSED, "Paused"),
+        ("BBADGgA=", CleaningState.DOCKED, "Docked"),
+        ("BhADGgIIAQ==", CleaningState.DOCKED, "Docked"),  # Fully charged
+        ("BBAHQgA=", CleaningState.RETURNING, "Returning"),
+        ("AA==", CleaningState.IDLE, "Idle"),
+        ("AhAB", CleaningState.SLEEPING, "Sleeping"),
+    ]
 
-    # Zone cleaning states
-    assert mock_t2267_robovac.getRoboVacHumanReadableValue(
-        RobovacCommand.STATUS, "CAoCCAIQBTIA"
-    ) == "Zone Cleaning"
-    assert mock_t2267_robovac.getRoboVacHumanReadableValue(
-        RobovacCommand.STATUS, "CgoCCAIQBTICCAE="
-    ) == "Zone Paused"
-
-    # Docked/charging states
-    assert mock_t2267_robovac.getRoboVacHumanReadableValue(
-        RobovacCommand.STATUS, "BBADGgA="
-    ) == "Charging"
-    assert mock_t2267_robovac.getRoboVacHumanReadableValue(
-        RobovacCommand.STATUS, "BhADGgIIAQ=="
-    ) == "Completed"
-
-    # Navigation states
-    assert mock_t2267_robovac.getRoboVacHumanReadableValue(
-        RobovacCommand.STATUS, "BBAHQgA="
-    ) == "Heading Home"
-
-    # Idle states
-    assert mock_t2267_robovac.getRoboVacHumanReadableValue(
-        RobovacCommand.STATUS, "AA=="
-    ) == "Standby"
-    assert mock_t2267_robovac.getRoboVacHumanReadableValue(
-        RobovacCommand.STATUS, "AhAB"
-    ) == "Sleeping"
+    for base64_status, expected_state, expected_display in test_cases:
+        parsed = mock_t2267_robovac.parse_protobuf_status(base64_status)
+        assert parsed is not None, f"Failed to parse {base64_status}"
+        assert parsed.state == expected_state, f"Expected {expected_state} for {base64_status}, got {parsed.state}"
+        assert expected_display in parsed.display_name, f"Expected '{expected_display}' in {parsed.display_name}"
 
 
-def test_t2267_activity_mapping(mock_t2267_robovac: RoboVac) -> None:
-    """Test T2267 activity_mapping for VacuumActivity states."""
-    activity_mapping = mock_t2267_robovac.model_details.activity_mapping
+def test_t2267_protobuf_status_activity(mock_t2267_robovac: RoboVac) -> None:
+    """Test that protobuf-parsed status maps correctly to VacuumActivity."""
+    test_cases = [
+        ("BgoAEAUyAA==", VacuumActivity.CLEANING),  # Cleaning
+        ("BgoAEAVSAA==", VacuumActivity.CLEANING),  # Positioning -> CLEANING
+        ("CAoAEAUyAggB", VacuumActivity.PAUSED),    # Paused
+        ("BBADGgA=", VacuumActivity.DOCKED),        # Charging
+        ("BBAHQgA=", VacuumActivity.RETURNING),     # Going home
+        ("AA==", VacuumActivity.IDLE),              # Standby
+        ("AhAB", VacuumActivity.IDLE),              # Sleeping -> IDLE
+    ]
 
-    # Verify activity_mapping exists
-    assert activity_mapping is not None
-
-    # Cleaning states map to CLEANING
-    assert activity_mapping["Cleaning"] == VacuumActivity.CLEANING
-    assert activity_mapping["Positioning"] == VacuumActivity.CLEANING
-    assert activity_mapping["Room Cleaning"] == VacuumActivity.CLEANING
-    assert activity_mapping["Zone Cleaning"] == VacuumActivity.CLEANING
-    assert activity_mapping["Remote Control"] == VacuumActivity.CLEANING
-
-    # Paused states map to PAUSED
-    assert activity_mapping["Paused"] == VacuumActivity.PAUSED
-    assert activity_mapping["Room Paused"] == VacuumActivity.PAUSED
-    assert activity_mapping["Zone Paused"] == VacuumActivity.PAUSED
-
-    # Returning states map to RETURNING
-    assert activity_mapping["Heading Home"] == VacuumActivity.RETURNING
-
-    # Docked states map to DOCKED
-    assert activity_mapping["Charging"] == VacuumActivity.DOCKED
-    assert activity_mapping["Completed"] == VacuumActivity.DOCKED
-
-    # Idle states map to IDLE
-    assert activity_mapping["Standby"] == VacuumActivity.IDLE
-    assert activity_mapping["Sleeping"] == VacuumActivity.IDLE
+    for base64_status, expected_activity in test_cases:
+        parsed = mock_t2267_robovac.parse_protobuf_status(base64_status)
+        assert parsed is not None
+        assert parsed.activity == expected_activity, \
+            f"Expected {expected_activity} for {base64_status}, got {parsed.activity}"
 
 
-def test_t2267_status_patterns(mock_t2267_robovac: RoboVac) -> None:
-    """Test T2267 status pattern matching for dynamic STATUS codes."""
-    # Verify status_patterns exists
-    status_patterns = mock_t2267_robovac.model_details.status_patterns
-    assert status_patterns is not None
-    assert len(status_patterns) > 0
-
-    # Test pattern matching for positioning codes with different timestamps
-    # These codes follow the pattern: DA...FSAA== (start with DA, end with FSAA==)
+def test_t2267_protobuf_status_with_timestamp(mock_t2267_robovac: RoboVac) -> None:
+    """Test T2267 protobuf parsing for positioning codes with timestamps."""
+    # These codes have embedded timestamps but should all parse as Positioning
     positioning_codes = [
-        "DAi73ou93qHyzgFSAA==",  # Different timestamps
+        "DAi73ou93qHyzgFSAA==",
         "DAjE74KF76HyzgFSAA==",
         "DAiCobvM+KHyzgFSAA==",
-        "DAxxxxxxxxxxxxxxFSAA==",  # Any content in middle should match
     ]
 
     for code in positioning_codes:
-        result = mock_t2267_robovac.getRoboVacHumanReadableValue(
-            RobovacCommand.STATUS, code
-        )
-        assert result == "Positioning", f"Expected 'Positioning' for {code}, got {result}"
+        parsed = mock_t2267_robovac.parse_protobuf_status(code)
+        assert parsed is not None, f"Failed to parse {code}"
+        assert parsed.state == CleaningState.POSITIONING, \
+            f"Expected POSITIONING for {code}, got {parsed.state}"
 
-    # Test that non-matching codes are returned as-is
-    non_matching = "XYZabc123=="
-    result = mock_t2267_robovac.getRoboVacHumanReadableValue(
-        RobovacCommand.STATUS, non_matching
+
+def test_t2267_protobuf_error_parsing(mock_t2267_robovac: RoboVac) -> None:
+    """Test T2267 protobuf-based ERROR parsing."""
+    # Positioning status sent on error channel should return None (no error)
+    positioning_on_error = "DAi73ou93qHyzgFSAA=="
+    result = mock_t2267_robovac.parse_protobuf_error(positioning_on_error)
+    assert result is None, "Positioning status on error channel should return None"
+
+    # Human-readable value for error should be "no_error" when no actual error
+    hr_result = mock_t2267_robovac.getRoboVacHumanReadableValue(
+        RobovacCommand.ERROR, positioning_on_error
     )
-    assert result == non_matching
+    assert hr_result == "no_error"
+
+
+def test_t2267_human_readable_status(mock_t2267_robovac: RoboVac) -> None:
+    """Test getRoboVacHumanReadableValue for STATUS uses protobuf."""
+    # The human-readable value should come from protobuf parsing
+    result = mock_t2267_robovac.getRoboVacHumanReadableValue(
+        RobovacCommand.STATUS, "BgoAEAUyAA=="
+    )
+    assert result == "Cleaning"
+
+    result = mock_t2267_robovac.getRoboVacHumanReadableValue(
+        RobovacCommand.STATUS, "BBADGgA="
+    )
+    assert result == "Docked"

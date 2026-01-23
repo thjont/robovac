@@ -5,7 +5,7 @@ from homeassistant.components.vacuum import VacuumActivity
 from .case_insensitive_lookup import case_insensitive_lookup
 from .tuyalocalapi import TuyaDevice
 from .vacuums import ROBOVAC_MODELS
-from .vacuums.base import RobovacCommand, RobovacModelDetails
+from .vacuums.base import RobovacCommand, RobovacModelDetails, ParsedStatus, CleaningState
 
 import logging
 
@@ -108,7 +108,59 @@ class RoboVac(TuyaDevice):
                 statuses (e.g., "Auto cleaning", "Returning home") to Home Assistant
                 VacuumActivity enum values, or None if not configured for this model.
         """
-        return self.model_details.activity_mapping
+        return getattr(self.model_details, 'activity_mapping', None)
+
+    def uses_protobuf(self) -> bool:
+        """Check if this model uses protobuf for status parsing.
+
+        Returns:
+            bool: True if the model uses protobuf parsing, False otherwise.
+        """
+        return getattr(self.model_details, 'uses_protobuf', False)
+
+    def parse_protobuf_status(self, value: str) -> ParsedStatus | None:
+        """Parse a STATUS value using protobuf for models that support it.
+
+        Args:
+            value: The base64-encoded status value from the device.
+
+        Returns:
+            ParsedStatus if protobuf parsing is available, None otherwise.
+        """
+        if not self.uses_protobuf():
+            return None
+
+        parse_status = getattr(self.model_details, 'parse_status', None)
+        if parse_status is None:
+            return None
+
+        try:
+            return parse_status(value)
+        except Exception as e:
+            _LOGGER.debug("Protobuf status parsing failed: %s", e)
+            return None
+
+    def parse_protobuf_error(self, value: str) -> str | None:
+        """Parse an ERROR value using protobuf for models that support it.
+
+        Args:
+            value: The base64-encoded error value from the device.
+
+        Returns:
+            Error string or None if no error, or None if not a protobuf model.
+        """
+        if not self.uses_protobuf():
+            return None
+
+        parse_error = getattr(self.model_details, 'parse_error', None)
+        if parse_error is None:
+            return None
+
+        try:
+            return parse_error(value)
+        except Exception as e:
+            _LOGGER.debug("Protobuf error parsing failed: %s", e)
+            return None
 
     def _get_command_values(
         self, command_name: RobovacCommand
@@ -243,6 +295,22 @@ class RoboVac(TuyaDevice):
         try:
             # Check if command_name is already a RobovacCommand enum
             cmd = command_name if isinstance(command_name, RobovacCommand) else RobovacCommand(command_name)
+
+            # For protobuf models, use protobuf parsing for STATUS and ERROR
+            if self.uses_protobuf():
+                if cmd == RobovacCommand.STATUS:
+                    parsed = self.parse_protobuf_status(value)
+                    if parsed is not None:
+                        return parsed.display_name
+
+                if cmd == RobovacCommand.ERROR:
+                    error_result = self.parse_protobuf_error(value)
+                    if error_result is not None:
+                        return error_result
+                    # If parse_error returned None, it means no error
+                    return "no_error"
+
+            # Try command values lookup
             values = self._get_command_values(cmd)
 
             if values is not None:

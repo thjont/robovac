@@ -114,6 +114,7 @@ class RoboVacEntity(StateVacuumEntity):
     _attr_activity_mapping: dict[str, VacuumActivity] | None = None
     _attr_error_code: int | str | None = None
     _attr_tuya_state: int | str | None = None
+    _attr_protobuf_activity: VacuumActivity | None = None  # Cached activity from protobuf parsing
 
     @property
     def robovac_supported(self) -> int | None:
@@ -263,6 +264,9 @@ class RoboVacEntity(StateVacuumEntity):
                 )
             )
             return VacuumActivity.ERROR
+        elif self._attr_protobuf_activity is not None:
+            # Use protobuf-parsed activity directly for protobuf models
+            return self._attr_protobuf_activity
         elif self._attr_tuya_state in [activity.value for activity in VacuumActivity]:
             # Particularly at system startup, the state may be set to a
             # VacuumActivity value directly, so we can return it as is.
@@ -601,14 +605,33 @@ class RoboVacEntity(StateVacuumEntity):
         tuya_state = self.tuyastatus.get(self._get_dps_code("STATUS"))
         error_code = self.tuyastatus.get(self._get_dps_code("ERROR_CODE"))
 
+        # Reset protobuf activity cache
+        self._attr_protobuf_activity = None
+
         # Update state attribute
         if tuya_state is not None and self.vacuum is not None:
-            self._attr_tuya_state = self.vacuum.getRoboVacHumanReadableValue(RobovacCommand.STATUS, tuya_state)
-            _LOGGER.debug(
-                "in _update_state_and_error, tuya_state: %s, self._attr_tuya_state: %s.",
-                tuya_state,
-                self._attr_tuya_state
-            )
+            # For protobuf models, try to get parsed status with activity
+            if self.vacuum.uses_protobuf():
+                parsed = self.vacuum.parse_protobuf_status(tuya_state)
+                if parsed is not None:
+                    self._attr_tuya_state = parsed.display_name
+                    self._attr_protobuf_activity = parsed.activity
+                    _LOGGER.debug(
+                        "in _update_state_and_error (protobuf), tuya_state: %s, display: %s, activity: %s.",
+                        tuya_state,
+                        self._attr_tuya_state,
+                        self._attr_protobuf_activity
+                    )
+                else:
+                    # Fallback if protobuf parsing fails
+                    self._attr_tuya_state = self.vacuum.getRoboVacHumanReadableValue(RobovacCommand.STATUS, tuya_state)
+            else:
+                self._attr_tuya_state = self.vacuum.getRoboVacHumanReadableValue(RobovacCommand.STATUS, tuya_state)
+                _LOGGER.debug(
+                    "in _update_state_and_error, tuya_state: %s, self._attr_tuya_state: %s.",
+                    tuya_state,
+                    self._attr_tuya_state
+                )
         else:
             self._attr_tuya_state = 0
 
