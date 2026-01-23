@@ -1,11 +1,10 @@
-from typing import Any, cast
-from collections.abc import Mapping
+from typing import Any
 from homeassistant.components.vacuum import VacuumActivity
 
 from .case_insensitive_lookup import case_insensitive_lookup
 from .tuyalocalapi import TuyaDevice
 from .vacuums import ROBOVAC_MODELS
-from .vacuums.base import RobovacCommand, RobovacModelDetails, ParsedStatus, CleaningState
+from .vacuums.base import RobovacCommand, RobovacModelDetails, ParsedStatus
 
 import logging
 
@@ -128,16 +127,39 @@ class RoboVac(TuyaDevice):
             ParsedStatus if protobuf parsing is available, None otherwise.
         """
         if not self.uses_protobuf():
+            _LOGGER.debug(
+                "[%s] parse_protobuf_status: model does not use protobuf",
+                self.model_code
+            )
             return None
 
         parse_status = getattr(self.model_details, 'parse_status', None)
         if parse_status is None:
+            _LOGGER.warning(
+                "[%s] parse_protobuf_status: uses_protobuf=True but no parse_status method",
+                self.model_code
+            )
             return None
 
         try:
-            return parse_status(value)
+            result = parse_status(value)
+            _LOGGER.debug(
+                "[%s] parse_protobuf_status: raw=%r -> state=%s, mode=%s, sub_state=%s, activity=%s",
+                self.model_code,
+                value,
+                result.state.value if result else None,
+                result.mode if result else None,
+                result.sub_state if result else None,
+                result.activity.value if result else None,
+            )
+            return result
         except Exception as e:
-            _LOGGER.debug("Protobuf status parsing failed: %s", e)
+            _LOGGER.warning(
+                "[%s] parse_protobuf_status: parsing failed for %r: %s",
+                self.model_code,
+                value,
+                e
+            )
             return None
 
     def parse_protobuf_error(self, value: str) -> str | None:
@@ -150,16 +172,36 @@ class RoboVac(TuyaDevice):
             Error string or None if no error, or None if not a protobuf model.
         """
         if not self.uses_protobuf():
+            _LOGGER.debug(
+                "[%s] parse_protobuf_error: model does not use protobuf",
+                self.model_code
+            )
             return None
 
         parse_error = getattr(self.model_details, 'parse_error', None)
         if parse_error is None:
+            _LOGGER.warning(
+                "[%s] parse_protobuf_error: uses_protobuf=True but no parse_error method",
+                self.model_code
+            )
             return None
 
         try:
-            return parse_error(value)
+            result = parse_error(value)
+            _LOGGER.debug(
+                "[%s] parse_protobuf_error: raw=%r -> result=%r (None means no error)",
+                self.model_code,
+                value,
+                result
+            )
+            return result
         except Exception as e:
-            _LOGGER.debug("Protobuf error parsing failed: %s", e)
+            _LOGGER.warning(
+                "[%s] parse_protobuf_error: parsing failed for %r: %s",
+                self.model_code,
+                value,
+                e
+            )
             return None
 
     def _get_command_values(
@@ -298,16 +340,43 @@ class RoboVac(TuyaDevice):
 
             # For protobuf models, use protobuf parsing for STATUS and ERROR
             if self.uses_protobuf():
+                _LOGGER.debug(
+                    "[%s] getRoboVacHumanReadableValue: using protobuf for %s, raw=%r",
+                    self.model_code,
+                    cmd.name,
+                    value
+                )
                 if cmd == RobovacCommand.STATUS:
                     parsed = self.parse_protobuf_status(value)
                     if parsed is not None:
+                        _LOGGER.debug(
+                            "[%s] getRoboVacHumanReadableValue: STATUS -> display_name=%r, activity=%s",
+                            self.model_code,
+                            parsed.display_name,
+                            parsed.activity.value
+                        )
                         return parsed.display_name
+                    else:
+                        _LOGGER.warning(
+                            "[%s] getRoboVacHumanReadableValue: protobuf STATUS parsing returned None for %r",
+                            self.model_code,
+                            value
+                        )
 
                 if cmd == RobovacCommand.ERROR:
                     error_result = self.parse_protobuf_error(value)
                     if error_result is not None:
+                        _LOGGER.debug(
+                            "[%s] getRoboVacHumanReadableValue: ERROR -> %r",
+                            self.model_code,
+                            error_result
+                        )
                         return error_result
                     # If parse_error returned None, it means no error
+                    _LOGGER.debug(
+                        "[%s] getRoboVacHumanReadableValue: ERROR -> no_error (parse returned None)",
+                        self.model_code
+                    )
                     return "no_error"
 
             # Try command values lookup

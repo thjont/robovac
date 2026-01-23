@@ -21,7 +21,7 @@ ERROR_MESSAGES = {
     19: "Laser sensor stuck",
     20: "Laser sensor blocked",
     21: "Base blocked",
-    # T2320 (X9 Pro) specific error codes (from proto-reference/error_code_list_t2320.proto)
+    # T2320 (X9 Pro) specific error codes (from proto/error_code_list_t2320.proto)
     # These codes are used by vacuums with auto-clean stations
     26: "Low battery - scheduled start failed",
     31: "Foreign objects stuck in suction port",
@@ -61,7 +61,7 @@ ERROR_MESSAGES = {
     114: "Water pumping device abnormal",
     117: "Ultrasonic sensor abnormal",
     119: "WiFi or Bluetooth abnormal",
-    # T22xx series error codes (from proto-reference/error_code_list_t2265.proto)
+    # T22xx series error codes (from proto/error_code_list_t2265.proto)
     # Wheel errors (1xxx)
     1010: "Left wheel open circuit",
     1011: "Left wheel short circuit",

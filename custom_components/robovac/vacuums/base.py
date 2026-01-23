@@ -12,17 +12,14 @@ from homeassistant.components.vacuum import VacuumActivity
 
 _LOGGER = logging.getLogger(__name__)
 
-# Setup proto-reference path for protobuf imports
+# Setup proto path for protobuf imports
 def _setup_proto_path() -> bool:
-    """Find and add proto-reference to sys.path."""
-    possible_paths = [
-        Path(__file__).parent.parent.parent.parent / "proto-reference",
-        Path.cwd() / "proto-reference",
-    ]
-    for p in possible_paths:
-        if p.exists() and str(p) not in sys.path:
-            sys.path.insert(0, str(p))
-            return True
+    """Find and add proto directory to sys.path."""
+    # Proto directory is at custom_components/robovac/proto
+    proto_path = Path(__file__).parent.parent / "proto"
+    if proto_path.exists() and str(proto_path) not in sys.path:
+        sys.path.insert(0, str(proto_path))
+        return True
     return False
 
 _setup_proto_path()
@@ -197,24 +194,47 @@ class ProtobufVacuumModel:
             _LOGGER.warning("Protobuf not available, returning unknown status")
             return ParsedStatus(state=CleaningState.IDLE)
 
+        original_data = data
+
         # Decode base64 if string
         if isinstance(data, str):
             try:
                 data = base64.b64decode(data)
+                _LOGGER.debug(
+                    "parse_status: decoded base64 %r -> bytes=%s (len=%d)",
+                    original_data,
+                    data.hex(),
+                    len(data)
+                )
             except Exception as e:
-                _LOGGER.error(f"Failed to decode base64: {e}")
+                _LOGGER.error(f"Failed to decode base64 {original_data!r}: {e}")
                 return ParsedStatus(state=CleaningState.IDLE)
 
         # Skip length prefix byte if present
         if len(data) > 0 and data[0] == len(data) - 1:
+            _LOGGER.debug(
+                "parse_status: stripped length prefix byte, remaining=%s",
+                data[1:].hex()
+            )
             data = data[1:]
 
         # Parse protobuf
         ws = WorkStatus()
         try:
             ws.ParseFromString(data)
+            _LOGGER.debug(
+                "parse_status: WorkStatus parsed - state=%s, has_mode=%s, has_cleaning=%s, "
+                "has_go_home=%s, has_charging=%s, has_relocating=%s, has_go_wash=%s",
+                ws.state,
+                ws.HasField('mode'),
+                ws.HasField('cleaning'),
+                ws.HasField('go_home'),
+                ws.HasField('charging'),
+                ws.HasField('relocating'),
+                ws.HasField('go_wash') if hasattr(ws, 'go_wash') else False,
+            )
         except Exception as e:
-            _LOGGER.error(f"Failed to parse WorkStatus protobuf: {e}")
+            _LOGGER.error(f"Failed to parse WorkStatus protobuf from {data.hex()}: {e}")
             return ParsedStatus(state=CleaningState.IDLE)
 
         return cls._interpret_work_status(ws)
@@ -222,13 +242,24 @@ class ProtobufVacuumModel:
     @classmethod
     def _interpret_work_status(cls, ws: Any) -> ParsedStatus:
         """Interpret a parsed WorkStatus message into our status model."""
+        _LOGGER.debug(
+            "_interpret_work_status: raw state enum value=%d",
+            ws.state
+        )
+
         # Check if state value is outside valid enum range (0-8)
         # This indicates an error code is being sent on the status channel
         if ws.state > 8:
             error_code = ws.state
+            error_msg = cls._get_error_message(error_code)
+            _LOGGER.debug(
+                "_interpret_work_status: state > 8, treating as error code %d -> %s",
+                error_code,
+                error_msg
+            )
             return ParsedStatus(
                 state=CleaningState.ERROR,
-                sub_state=cls._get_error_message(error_code),
+                sub_state=error_msg,
                 raw_proto=ws,
             )
 
@@ -318,6 +349,16 @@ class ProtobufVacuumModel:
             state = CleaningState.CLEANING
             sub_state = "mapping"
 
+        _LOGGER.debug(
+            "_interpret_work_status: final -> state=%s, mode=%s, is_scheduled=%s, "
+            "sub_state=%s, is_relocating=%s",
+            state.value,
+            mode,
+            is_scheduled,
+            sub_state,
+            is_relocating
+        )
+
         return ParsedStatus(
             state=state,
             mode=mode,
@@ -339,15 +380,21 @@ class ProtobufVacuumModel:
         Returns:
             Error description string, or None if no error
         """
+        _LOGGER.debug("parse_error: input=%r", data)
+
         if isinstance(data, str):
             # Check if this looks like a WorkStatus message (positioning status)
             if data.startswith("DA") and data.endswith("FSAA=="):
-                # This is a positioning status, not an error
+                _LOGGER.debug(
+                    "parse_error: detected positioning status pattern (DA...FSAA==), returning None"
+                )
                 return None
 
             try:
                 raw = base64.b64decode(data)
-            except Exception:
+                _LOGGER.debug("parse_error: decoded base64 -> bytes=%s", raw.hex())
+            except Exception as e:
+                _LOGGER.debug("parse_error: base64 decode failed: %s, returning as-is", e)
                 return data  # Return as-is if can't decode
         else:
             raw = data
@@ -356,11 +403,15 @@ class ProtobufVacuumModel:
         if len(raw) <= 4:
             try:
                 error_code = int.from_bytes(raw, 'little')
+                _LOGGER.debug("parse_error: parsed as int error_code=%d", error_code)
                 if error_code == 0:
+                    _LOGGER.debug("parse_error: error_code=0, returning None (no error)")
                     return None
-                return cls._get_error_message(error_code)
-            except Exception:
-                pass
+                error_msg = cls._get_error_message(error_code)
+                _LOGGER.debug("parse_error: error_code=%d -> %s", error_code, error_msg)
+                return error_msg
+            except Exception as e:
+                _LOGGER.debug("parse_error: int parsing failed: %s", e)
 
         # Check if it's a WorkStatus (status sent on error channel)
         if len(raw) > 1 and PROTOBUF_AVAILABLE:
@@ -368,14 +419,24 @@ class ProtobufVacuumModel:
                 ws = WorkStatus()
                 test_data = raw[1:] if raw[0] == len(raw) - 1 else raw
                 ws.ParseFromString(test_data)
+                _LOGGER.debug(
+                    "parse_error: parsed as WorkStatus with state=%d",
+                    ws.state
+                )
                 # If it parses as WorkStatus with normal state, it's not an error
                 if ws.state in [WorkStatus.State.CLEANING, WorkStatus.State.GO_HOME,
                                WorkStatus.State.STANDBY, WorkStatus.State.CHARGING]:
+                    _LOGGER.debug(
+                        "parse_error: WorkStatus state=%d is normal, returning None",
+                        ws.state
+                    )
                     return None
-            except Exception:
-                pass
+            except Exception as e:
+                _LOGGER.debug("parse_error: WorkStatus parsing failed: %s", e)
 
-        return data.hex() if isinstance(data, bytes) else data
+        result = data.hex() if isinstance(data, bytes) else data
+        _LOGGER.debug("parse_error: no match, returning raw: %r", result)
+        return result
 
     @classmethod
     def _get_error_message(cls, code: int) -> str:

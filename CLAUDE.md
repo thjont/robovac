@@ -68,9 +68,9 @@ RobovacCommand.MODE: {
 
 Device responses use case-insensitive matching - "AUTO", "auto", "Auto" all resolve correctly.
 
-## Proto Reference (Reference Only)
+## Proto Reference
 
-The `proto-reference/` directory contains Protocol Buffer definitions that document the communication protocol used by newer Eufy vacuums. **This is reference material only and is not part of the Home Assistant integration.**
+The `custom_components/robovac/proto/` directory contains Protocol Buffer definitions used by protobuf-based vacuum models (e.g., T2267) for status parsing.
 
 Key proto files:
 
