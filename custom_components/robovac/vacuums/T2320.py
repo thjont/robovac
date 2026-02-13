@@ -24,13 +24,6 @@ class T2320(RobovacModelDetails):
         | RoboVacEntityFeature.MAP
     )
     commands = {
-        RobovacCommand.START_PAUSE: {
-            "code": 152,  # Same as MODE, uses protobuf-encoded values like T2267
-            "values": {
-                "pause": "AggN",  # Protobuf: ModeCtrlRequest.Method.PAUSE_TASK
-                "resume": "AggO",  # Protobuf: ModeCtrlRequest.Method.RESUME_TASK
-            },
-        },
         RobovacCommand.MODE: {
             "code": 152,
             "values": {
@@ -42,7 +35,7 @@ class T2320(RobovacModelDetails):
             },
         },
         RobovacCommand.STATUS: {
-            "code": 177,
+            "code": 153,
             "values": {
                 # Protobuf-encoded status values (similar to T2080/T2267)
                 # Cleaning states
@@ -95,12 +88,21 @@ class T2320(RobovacModelDetails):
                 "CAoAEAIyAggB": "Error",
             },
         },
-        RobovacCommand.RETURN_HOME: {
-            # Return home is sent via MODE command (code 152) with protobuf-encoded value
-            # "AggG" encodes ModeCtrlRequest.Method.START_GOHOME (6)
-            "code": 152,
+        RobovacCommand.DIRECTION: {
+            "code": 155,
             "values": {
-                "return": "AggG",
+                "brake": "brake",
+                "forward": "forward",
+                "back": "back",
+                "left": "left",
+                "right": "right",
+            },
+        },
+        RobovacCommand.START_PAUSE: {
+            "code": 152,  # Same as MODE, uses protobuf-encoded values like T2267
+            "values": {
+                "pause": "AggN",  # Protobuf: ModeCtrlRequest.Method.PAUSE_TASK
+                "resume": "AggO",  # Protobuf: ModeCtrlRequest.Method.RESUME_TASK
             },
         },
         RobovacCommand.STOP: {
@@ -110,6 +112,9 @@ class T2320(RobovacModelDetails):
             "values": {
                 "stop": "AggM",
             },
+        },
+        RobovacCommand.DO_NOT_DISTURB: {
+            "code": 157,
         },
         RobovacCommand.FAN_SPEED: {
             "code": 154,
@@ -121,23 +126,28 @@ class T2320(RobovacModelDetails):
                 "boost_iq": "Boost_IQ",
             },
         },
+        RobovacCommand.BOOST_IQ: {
+            "code": 159,
+        },
         RobovacCommand.LOCATE: {
             "code": 160,
         },
         RobovacCommand.BATTERY: {
-            "code": 172,
+            "code": 163,
+        },
+        RobovacCommand.CONSUMABLES: {
+            "code": 168,
         },
         RobovacCommand.ERROR: {
             "code": 169,
         },
-        RobovacCommand.BOOST_IQ: {
-            "code": 159,
-        },
-        RobovacCommand.CLEANING_TIME: {
-            "code": 6,
-        },
-        RobovacCommand.CLEANING_AREA: {
-            "code": 7,
+        RobovacCommand.RETURN_HOME: {
+            # Return home is sent via MODE command (code 152) with protobuf-encoded value
+            # "AggG" encodes ModeCtrlRequest.Method.START_GOHOME (6)
+            "code": 152,
+            "values": {
+                "return": "AggG",
+            },
         },
         RobovacCommand.ERROR: {
             "code": 177,
