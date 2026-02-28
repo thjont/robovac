@@ -143,6 +143,23 @@ class TestT2320CommandMappings:
         )
         assert result == "Washing Mop"
 
+    def test_fan_speed_proto_decoder_configured(self, t2320_robovac):
+        """Test T2320 has fan_speed_proto_decoder configured."""
+        decoder = getattr(t2320_robovac.model_details, 'fan_speed_proto_decoder', None)
+        assert decoder is not None
+        assert callable(decoder)
+
+    def test_decode_fan_speed_via_robovac(self, t2320_robovac):
+        """Test decodeFanSpeed works through the RoboVac instance with real data."""
+        # Pre-built base64 CleanParamResponse with suction=MAX (3)
+        sample_max = "JAoQCgIIAhoCCAEiAggBMgIIAyIQCgIIAhoCCAEiAggBMgIIAw=="
+        result = t2320_robovac.decodeFanSpeed(sample_max)
+        assert result == "Max"
+
+    def test_decode_fan_speed_returns_none_for_plain_string(self, t2320_robovac):
+        """Plain string values should return None (not proto-decodable)."""
+        assert t2320_robovac.decodeFanSpeed("Quiet") is None
+
     def test_fan_speed_values(self, t2320_robovac):
         """Test FAN_SPEED command value mappings."""
         # Test snake_case input -> PascalCase output

@@ -3,9 +3,12 @@
 from homeassistant.components.vacuum import VacuumActivity, VacuumEntityFeature
 
 from .base import RobovacCommand, RoboVacEntityFeature, RobovacModelDetails
+from ..protobuf_decoder import decode_proto_fan_speed
 
 
 class T2320(RobovacModelDetails):
+    fan_speed_proto_decoder = staticmethod(decode_proto_fan_speed)
+
     homeassistant_features = (
         VacuumEntityFeature.FAN_SPEED
         | VacuumEntityFeature.LOCATE
@@ -35,7 +38,7 @@ class T2320(RobovacModelDetails):
             },
         },
         RobovacCommand.STATUS: {
-            "code": 153,
+            "code": 177,
             "values": {
                 # Protobuf-encoded status values (similar to T2080/T2267)
                 # Cleaning states
@@ -133,13 +136,10 @@ class T2320(RobovacModelDetails):
             "code": 160,
         },
         RobovacCommand.BATTERY: {
-            "code": 163,
+            "code": 172,
         },
         RobovacCommand.CONSUMABLES: {
             "code": 168,
-        },
-        RobovacCommand.ERROR: {
-            "code": 169,
         },
         RobovacCommand.RETURN_HOME: {
             # Return home is sent via MODE command (code 152) with protobuf-encoded value

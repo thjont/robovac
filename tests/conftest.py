@@ -96,6 +96,8 @@ def mock_robovac() -> MagicMock:
     # Mock the new methods added in PR #161
     # For models without activity mapping, return None
     mock.getRoboVacActivityMapping.return_value = None
+    # Non-proto models have no proto decoder; return None so caller falls through
+    mock.decodeFanSpeed.return_value = None
 
     # For human readable values, return the original value (no conversion)
     mock.getRoboVacHumanReadableValue.side_effect = lambda command, value: value

@@ -643,7 +643,12 @@ class RoboVacEntity(StateVacuumEntity):
         else:
             self._attr_mode = ""
 
-        # Update fan speed attribute
+        # Update fan speed attribute — try protobuf decoding first
+        if fan_speed is not None and self.vacuum is not None:
+            decoded = self.vacuum.decodeFanSpeed(fan_speed)
+            if decoded is not None:
+                self._attr_fan_speed = decoded
+                return
         self._attr_fan_speed = fan_speed if fan_speed is not None else ""
 
         # Format fan speed for display

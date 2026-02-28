@@ -161,6 +161,7 @@ async def test_vacuum_update_uses_correct_dps_codes() -> None:
     # Mock the new methods to return values as-is (no conversion)
     mock_robovac.getRoboVacHumanReadableValue.side_effect = lambda command, value: value
     mock_robovac.getRoboVacActivityMapping.return_value = None
+    mock_robovac.decodeFanSpeed.return_value = None
 
     # Initialize the vacuum entity
     with patch("custom_components.robovac.vacuum.RoboVac", return_value=mock_robovac):

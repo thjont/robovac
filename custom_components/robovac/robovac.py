@@ -137,6 +137,21 @@ class RoboVac(TuyaDevice):
 
         return values
 
+    def decodeFanSpeed(self, raw_value: str) -> str | None:
+        """Decode a protobuf-encoded fan speed value if this model supports it.
+
+        Args:
+            raw_value: The raw DPS value (potentially base64-encoded protobuf)
+
+        Returns:
+            Human-readable fan speed string, or None if this model doesn't
+            use protobuf fan speed encoding or decoding fails.
+        """
+        decoder = getattr(self.model_details, 'fan_speed_proto_decoder', None)
+        if decoder is not None:
+            return decoder(raw_value)
+        return None
+
     def getFanSpeeds(self) -> list[str]:
         """Get the supported fan speeds for this vacuum model.
 
